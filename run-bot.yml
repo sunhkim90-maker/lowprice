@@ -1,0 +1,49 @@
+name: Daily Lowprice Bot
+
+on:
+  schedule:
+    # 한국시간(KST, UTC+9) 매일 오전 9시 = UTC 기준 매일 00:00
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Seoul
+    steps:
+      - name: Check expiration date (until 2026-11-20)
+        id: check_date
+        run: |
+          CURRENT_DATE=$(date +%Y-%m-%d)
+          echo "Current KST Date: $CURRENT_DATE"
+          if [[ "$CURRENT_DATE" > "2026-11-20" ]]; then
+            echo "expired=true" >> $GITHUB_OUTPUT
+            echo "⏹️ [유지 기한 만료] 종료 시한(2026.11.20)이 지나 봇을 실행하지 않고 종료합니다."
+          else
+            echo "expired=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout repository
+        if: steps.check_date.outputs.expired == 'false'
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        if: steps.check_date.outputs.expired == 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Create .env from GitHub Secrets and run lowprice_bot.py
+        if: steps.check_date.outputs.expired == 'false'
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+        run: |
+          cat <<EOF > .env
+          KAKAO_REST_API_KEY=${KAKAO_REST_API_KEY}
+          KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}
+          KAKAO_REFRESH_TOKEN=${KAKAO_REFRESH_TOKEN}
+          EOF
+          python lowprice_bot.py --until "2026-11-20 23:59:59"
